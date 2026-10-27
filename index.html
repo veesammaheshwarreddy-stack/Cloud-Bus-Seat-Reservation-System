@@ -1,0 +1,450 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Bus Seat Reservation</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        
+        body {
+            margin: 0;
+            background: #f1f5f9;
+            color: #1e293b;
+        }
+        
+        header {
+            background: #0f172a;
+            color: white;
+            text-align: center;
+            padding: 25px;
+        }
+        
+        header h1 {
+            color: #38bdf8;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 25px auto;
+            padding: 20px;
+        }
+        
+        .card {
+            background: white;
+            padding: 22px;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            box-shadow: 0 3px 10px #00000012;
+        }
+        
+        h2 {
+            color: #0369a1;
+        }
+        
+        input,
+        select,
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 7px 0;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+        }
+        
+        button {
+            background: #0284c7;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        button:hover {
+            background: #0369a1;
+        }
+        
+        .bus-info {
+            background: #e0f2fe;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        
+        .seat-layout {
+            display: grid;
+            grid-template-columns: repeat(4, 55px);
+            gap: 12px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        .seat {
+            padding: 14px 0;
+            border-radius: 7px;
+            text-align: center;
+            background: #bbf7d0;
+            color: #166534;
+            cursor: pointer;
+            border: 1px solid #16a34a;
+        }
+        
+        .seat.selected {
+            background: #0284c7;
+            color: white;
+        }
+        
+        .seat.booked {
+            background: #fecaca;
+            color: #991b1b;
+            cursor: not-allowed;
+            border-color: #dc2626;
+        }
+        
+        .legend {
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        #ticket {
+            border: 2px dashed #0284c7;
+            background: #f0f9ff;
+            padding: 18px;
+            border-radius: 10px;
+        }
+        
+        footer {
+            background: #0f172a;
+            color: white;
+            text-align: center;
+            padding: 15px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>🚌 Cloud Bus Reservation</h1>
+        <p>Search Buses | Select Seats | Book Tickets</p>
+    </header>
+
+    <div class="container">
+
+        <div class="card">
+            <h2>Search Your Bus</h2>
+
+            <label>From</label>
+            <select id="from">
+            <option value="">Select Source</option>
+            <option>Chennai</option>
+            <option>Tirupati</option>
+            <option>Bengaluru</option>
+            <option>Hyderabad</option>
+            <option>Vijayawada</option>
+        </select>
+
+            <label>To</label>
+            <select id="to">
+            <option value="">Select Destination</option>
+            <option>Chennai</option>
+            <option>Tirupati</option>
+            <option>Bengaluru</option>
+            <option>Hyderabad</option>
+            <option>Vijayawada</option>
+        </select>
+
+            <label>Journey Date</label>
+            <input type="date" id="date">
+
+            <button onclick="searchBus()">Search Bus</button>
+            <div id="busResult"></div>
+        </div>
+
+        <div class="card hidden" id="bookingSection">
+            <h2>Select Your Seats</h2>
+
+            <p class="legend">
+                🟩 Available &nbsp; 🟦 Selected &nbsp; 🟥 Booked
+            </p>
+
+            <div class="seat-layout" id="seatLayout"></div>
+
+            <p id="selectedSeats">Selected Seats: None</p>
+            <h3 id="fare">Total Fare: ₹0</h3>
+
+            <h2>Passenger Details</h2>
+
+            <input id="passenger" placeholder="Passenger Name">
+            <input id="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit Mobile Number">
+
+            <button onclick="bookTicket()">Confirm Booking</button>
+        </div>
+
+        <div class="card hidden" id="ticketSection">
+            <h2>Booking Confirmation</h2>
+            <div id="ticket"></div>
+            <button onclick="window.print()">Print Ticket</button>
+        </div>
+
+        <div class="card">
+            <h2>My Reservations</h2>
+            <div id="history"></div>
+        </div>
+
+    </div>
+
+    <footer>
+        <p>Cloud Bus Seat Reservation System | Student Project</p>
+    </footer>
+
+    <script>
+        const SEAT_COUNT = 20;
+        const FARE_PER_SEAT = 500;
+
+        let selected = [];
+        let currentBus = null;
+
+        let bookings = JSON.parse(
+            localStorage.getItem("busBookings") || "[]"
+        );
+
+        const busResult = document.getElementById("busResult");
+        const bookingSection = document.getElementById("bookingSection");
+        const ticketSection = document.getElementById("ticketSection");
+        const seatLayout = document.getElementById("seatLayout");
+
+        document.getElementById("date").min =
+            new Date().toLocaleDateString("en-CA");
+
+        document.getElementById("date").value =
+            new Date().toLocaleDateString("en-CA");
+
+        function searchBus() {
+            const from = document.getElementById("from").value;
+            const to = document.getElementById("to").value;
+            const date = document.getElementById("date").value;
+
+            if (!from || !to || !date) {
+                alert("Please select source, destination and date.");
+                return;
+            }
+
+            if (from === to) {
+                alert("Source and destination cannot be the same.");
+                return;
+            }
+
+            if (date < new Date().toLocaleDateString("en-CA")) {
+                alert("Please select today or a future date.");
+                return;
+            }
+
+            currentBus = {
+                from,
+                to,
+                date
+            };
+            selected = [];
+
+            busResult.replaceChildren();
+
+            const info = document.createElement("div");
+            info.className = "bus-info";
+
+            const title = document.createElement("h3");
+            title.textContent = "Express AC Bus";
+
+            const details = document.createElement("p");
+            details.textContent =
+                from + " → " + to + " | " + date;
+
+            const fareInfo = document.createElement("p");
+            fareInfo.textContent =
+                "Fare: ₹" + FARE_PER_SEAT + " per seat";
+
+            const chooseButton = document.createElement("button");
+            chooseButton.textContent = "Choose Seats";
+            chooseButton.onclick = showSeats;
+
+            info.append(title, details, fareInfo, chooseButton);
+            busResult.appendChild(info);
+
+            bookingSection.classList.add("hidden");
+            ticketSection.classList.add("hidden");
+        }
+
+        function bookingKey() {
+            return currentBus.from + "|" +
+                currentBus.to + "|" + currentBus.date;
+        }
+
+        function bookedSeats() {
+            return bookings
+                .filter(b => b.key === bookingKey())
+                .flatMap(b => b.seats);
+        }
+
+        function showSeats() {
+            bookingSection.classList.remove("hidden");
+            ticketSection.classList.add("hidden");
+            selected = [];
+            seatLayout.replaceChildren();
+
+            const occupied = bookedSeats();
+
+            for (let i = 1; i <= SEAT_COUNT; i++) {
+                const seat = document.createElement("button");
+                seat.className = "seat";
+                seat.textContent = i;
+                seat.type = "button";
+
+                if (occupied.includes(i)) {
+                    seat.classList.add("booked");
+                    seat.disabled = true;
+                } else {
+                    seat.onclick = () => toggleSeat(i, seat);
+                }
+
+                seatLayout.appendChild(seat);
+            }
+
+            updateFare();
+        }
+
+        function toggleSeat(number, element) {
+            if (selected.includes(number)) {
+                selected = selected.filter(n => n !== number);
+                element.classList.remove("selected");
+            } else {
+                selected.push(number);
+                element.classList.add("selected");
+            }
+
+            updateFare();
+        }
+
+        function updateFare() {
+            document.getElementById("selectedSeats").textContent =
+                "Selected Seats: " +
+                (selected.length ? selected.sort((a, b) => a - b).join(", ") : "None");
+
+            document.getElementById("fare").textContent =
+                "Total Fare: ₹" + (selected.length * FARE_PER_SEAT);
+        }
+
+        function bookTicket() {
+            const name = document.getElementById("passenger").value.trim();
+            const phone = document.getElementById("phone").value.trim();
+
+            if (!selected.length) {
+                alert("Please select at least one seat.");
+                return;
+            }
+
+            if (!name || !/^[0-9]{10}$/.test(phone)) {
+                alert("Enter passenger name and a valid 10-digit mobile number.");
+                return;
+            }
+
+            // Check again before booking.
+            const occupied = bookedSeats();
+            if (selected.some(n => occupied.includes(n))) {
+                alert("A selected seat is no longer available. Search again.");
+                showSeats();
+                return;
+            }
+
+            const booking = {
+                id: "BUS" + Date.now(),
+                key: bookingKey(),
+                from: currentBus.from,
+                to: currentBus.to,
+                date: currentBus.date,
+                name: name,
+                phone: phone,
+                seats: [...selected].sort((a, b) => a - b),
+                total: selected.length * FARE_PER_SEAT
+            };
+
+            bookings.push(booking);
+            localStorage.setItem("busBookings", JSON.stringify(bookings));
+
+            showTicket(booking);
+            showHistory();
+
+            selected = [];
+            document.getElementById("passenger").value = "";
+            document.getElementById("phone").value = "";
+        }
+
+        function showTicket(b) {
+            const ticket = document.getElementById("ticket");
+            ticket.replaceChildren();
+
+            const details = [
+                ["Booking ID", b.id],
+                ["Passenger", b.name],
+                ["Route", b.from + " → " + b.to],
+                ["Journey Date", b.date],
+                ["Seat Numbers", b.seats.join(", ")],
+                ["Total Fare", "₹" + b.total],
+                ["Status", "Confirmed (Demo)"]
+            ];
+
+            details.forEach(([label, value]) => {
+                const p = document.createElement("p");
+                const strong = document.createElement("b");
+                strong.textContent = label + ": ";
+                p.append(strong, document.createTextNode(value));
+                ticket.appendChild(p);
+            });
+
+            ticketSection.classList.remove("hidden");
+            bookingSection.classList.add("hidden");
+            ticketSection.scrollIntoView({
+                behavior: "smooth"
+            });
+        }
+
+        function showHistory() {
+            const history = document.getElementById("history");
+            history.replaceChildren();
+
+            if (!bookings.length) {
+                history.textContent = "No reservations yet.";
+                return;
+            }
+
+            [...bookings].reverse().forEach(b => {
+                const card = document.createElement("div");
+                card.className = "bus-info";
+
+                const info = document.createElement("p");
+                info.textContent =
+                    b.id + " | " + b.from + " → " + b.to +
+                    " | " + b.date + " | Seats: " +
+                    b.seats.join(", ") + " | ₹" + b.total;
+
+                card.appendChild(info);
+                history.appendChild(card);
+            });
+        }
+
+        showHistory();
+    </script>
+
+</body>
+
+</html>
+```
